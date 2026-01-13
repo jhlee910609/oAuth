@@ -5,10 +5,9 @@ export default function middleware(req: NextRequest) {
 
   // 1. 제외 경로 설정 (인증 과정에 필요한 경로들은 통과시켜야 함)
   const publicPaths = [
-    "/api/auth",       // 로그인/로그아웃/토큰발급 API
+    "/api/auth",       // 로그인/로그아웃/콜백 API (Server-Side Flow)
     "/api/oauth",      // Mock Provider API
     "/provider",       // Mock Provider 로그인 화면
-    "/login/callback", // 콜백 화면
     "/_next",          // 정적 리소스
     "/favicon.ico"     // 아이콘
   ];

@@ -8,7 +8,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
  * 로그인을 위해 'Provider의 로그인 페이지'로 토스합니다.
  */
 export default function handler(req: NextApiRequest, res: NextApiResponse) {
-  const { client_id, redirect_uri, response_type, state } = req.query;
+  const { client_id, redirect_uri, response_type, state, code_challenge, code_challenge_method } = req.query;
 
   // 1. 필수 파라미터 검증
   if (!client_id || !redirect_uri || response_type !== 'code') {
@@ -23,6 +23,12 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
   providerLoginUrl.searchParams.set('client_id', client_id as string);
   providerLoginUrl.searchParams.set('redirect_uri', redirect_uri as string);
   providerLoginUrl.searchParams.set('state', state as string || '');
+
+  // PKCE 파라미터 전달
+  if (code_challenge) {
+      providerLoginUrl.searchParams.set('code_challenge', code_challenge as string);
+      providerLoginUrl.searchParams.set('code_challenge_method', code_challenge_method as string || 'S256');
+  }
 
   res.redirect(providerLoginUrl.toString());
 }

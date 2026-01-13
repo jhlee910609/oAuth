@@ -1,42 +1,58 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { serialize } from 'cookie';
+import crypto from 'crypto';
 
 /**
  * [CLIENT BFF] /api/auth/signin
- * 
- * 로그인 과정을 서버 사이드에서 시작합니다.
- * 1. State 생성 및 쿠키 설정 (HttpOnly)
- * 2. Provider의 Authorize URL 생성
- * 3. 302 Redirect 응답
+ * PKCE (Proof Key for Code Exchange) Flow 적용
  */
 export default function handler(req: NextApiRequest, res: NextApiResponse) {
   // 1. CSRF State 생성
   const state = Math.random().toString(36).substring(7);
+  
+  // 2. PKCE - Code Verifier 및 Challenge 생성
+  // Verifier: 랜덤 문자열 (43~128자)
+  const codeVerifier = crypto.randomBytes(32).toString('base64url');
+  // Challenge: Verifier를 SHA256 해시 -> Base64Url 인코딩
+  const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('base64url');
 
-  // 2. State 쿠키 설정 (HttpOnly로 보안 강화!)
+  // 3. State & Verifier 쿠키 설정 (HttpOnly)
   const stateCookie = serialize('oauth_state', state, {
-    httpOnly: true, // JS 접근 불가 -> 더 안전함
+    httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     path: '/',
-    maxAge: 300, // 5분
+    maxAge: 300,
+    sameSite: 'lax',
+  });
+  
+  const verifierCookie = serialize('code_verifier', codeVerifier, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    path: '/',
+    maxAge: 300,
     sameSite: 'lax',
   });
 
-  // 3. Provider URL 생성
+  // 4. Provider URL 생성 (PKCE 파라미터 추가)
   const protocol = req.headers['x-forwarded-proto'] || 'http';
   const host = req.headers.host;
   const origin = `${protocol}://${host}`;
   
   const clientId = "practice-client-id";
-  const redirectUri = `${origin}/login/callback`;
+  // 이제 Callback을 API Route가 직접 받습니다.
+  const redirectUri = `${origin}/api/auth/callback`;
   
   const authUrl = new URL(`${origin}/api/oauth/authorize`);
   authUrl.searchParams.set("client_id", clientId);
   authUrl.searchParams.set("redirect_uri", redirectUri);
   authUrl.searchParams.set("response_type", "code");
   authUrl.searchParams.set("state", state);
+  
+  // PKCE Parameters
+  authUrl.searchParams.set("code_challenge", codeChallenge);
+  authUrl.searchParams.set("code_challenge_method", "S256");
 
-  // 4. 헤더 설정 & 리다이렉트
-  res.setHeader('Set-Cookie', stateCookie);
+  // 5. 헤더 설정 & 리다이렉트
+  res.setHeader('Set-Cookie', [stateCookie, verifierCookie]);
   res.redirect(authUrl.toString());
 }

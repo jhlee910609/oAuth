@@ -8,7 +8,13 @@ export default function ProviderSignIn() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const { client_id, redirect_uri, state } = router.query;
+  const {
+    client_id,
+    redirect_uri,
+    state,
+    code_challenge,
+    code_challenge_method,
+  } = router.query;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,6 +29,8 @@ export default function ProviderSignIn() {
         client_id,
         redirect_uri,
         state,
+        code_challenge,
+        code_challenge_method,
       }),
     });
 
