@@ -14,8 +14,19 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
 
   const { username, password, client_id, redirect_uri, state, code_challenge, code_challenge_method } = req.body;
 
-  // 1. ID/PW 검증 (Mock)
-  if (username !== 'user' || password !== 'password') {
+  if (!redirect_uri) {
+      return res.status(400).json({ error: 'Missing redirect_uri parameter' });
+  }
+
+  // 1. ID/PW 검증 (Mock DB Usage)
+  if (!(global as any).mockUsers) {
+      (global as any).mockUsers = new Map();
+      (global as any).mockUsers.set('user', 'password'); // Default User
+  }
+
+  const storedPassword = (global as any).mockUsers.get(username);
+
+  if (!storedPassword || storedPassword !== password) {
     return res.status(401).json({ error: 'Invalid credentials' });
   }
 

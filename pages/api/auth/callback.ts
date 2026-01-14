@@ -3,79 +3,86 @@ import { serialize } from 'cookie';
 
 /**
  * [CLIENT BFF] /api/auth/callback
- * 
- * Provider로부터 Authorization Code를 받아오는 최종 목적지입니다.
- * Page Router(UI)가 아닌 API Route가 직접 Callback을 받습니다.
+ * Authorization Code를 받아 Access Token으로 교환하고 세션을 맺는 역할
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // GET 요청으로 Code와 State가 들어옵니다.
+  // 1. Query String에서 Authorization Code & State 추출
   const { code, state } = req.query;
+  // 2. 쿠키에 저장해둔 검증용 데이터 추출
+  const { oauth_state, code_verifier } = req.cookies;
+
+  if (!code || !state || !oauth_state || !code_verifier) {
+    return res.status(400).json({ error: "Missing required parameters or cookies" });
+  }
+
+  // 3. State 보안 검증 (CSRF 방지)
+  if (state !== oauth_state) {
+    return res.status(400).json({ error: "Invalid state. Possible CSRF attack." });
+  }
 
   try {
-    // 0. PKCE & CSRF 검증
-    const savedState = req.cookies['oauth_state'];
-    const codeVerifier = req.cookies['code_verifier'];
-    
-    if (!state || !savedState || state !== savedState) {
-       return res.status(403).json({ error: "Invalid State (CSRF check failed)" });
+    // 4. Token Endpoint 호출 (Server-to-Server 통신)
+    const protocol = req.headers['x-forwarded-proto'] || 'http';
+    const host = req.headers.host;
+    const tokenEndpoint = `${protocol}://${host}/api/oauth/token`;
+
+    const tokenResponse = await fetch(tokenEndpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        grant_type: "authorization_code",
+        code: code,
+        client_id: "practice-client-id",
+        client_secret: "practice-client-secret",
+        code_verifier: code_verifier,
+      }),
+    });
+
+    const tokenData = await tokenResponse.json();
+
+    if (!tokenResponse.ok) {
+        return res.status(400).json(tokenData);
     }
 
-    if (!codeVerifier) {
-        return res.status(403).json({ error: "Missing Code Verifier (PKCE failed)" });
-    }
+    // 5. 토큰을 받아서 세션 쿠키로 굽기
+    const { access_token, refresh_token, expires_in } = tokenData;
 
-    // 1. 검증 완료된 쿠키들 삭제 설정 (일회용)
+    // Access Token (세션용)
+    const sessionCookie = serialize('session_token', access_token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      path: '/',
+      maxAge: expires_in, // 토큰 수명과 동일하게 설정
+      sameSite: 'lax',
+    });
+
+    // Refresh Token (토큰 갱신용 - 더 길게 설정)
+    const refreshCookie = serialize('refresh_token', refresh_token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      path: '/',
+      maxAge: 60 * 60 * 24 * 7, // 7일
+      sameSite: 'lax',
+    });
+
+    // 임시 쿠키 정리 (State, Verifier 삭제)
     const clearStateCookie = serialize('oauth_state', '', { maxAge: -1, path: '/' });
     const clearVerifierCookie = serialize('code_verifier', '', { maxAge: -1, path: '/' });
 
-    // 2. 토큰 교환 요청 (Server-to-Server)
-    const protocol = req.headers['x-forwarded-proto'] || 'http';
-    const host = req.headers.host;
-    const origin = `${protocol}://${host}`;
+    res.setHeader('Set-Cookie', [
+      sessionCookie,
+      refreshCookie,
+      clearStateCookie,
+      clearVerifierCookie
+    ]);
 
-    const tokenResponse = await fetch(`${origin}/api/oauth/token`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          grant_type: "authorization_code",
-          code,
-          code_verifier: codeVerifier, // PKCE 핵심: 원본 암호 전송
-          client_id: "practice-client-id",
-          client_secret: "practice-client-secret", 
-        }),
-      });
-  
-    const data = await tokenResponse.json();
-
-    if (!tokenResponse.ok) {
-      return res.status(tokenResponse.status).json(data);
-    }
-
-    // 3. Session Cookie 설정 (HttpOnly)
-    // Access Token
-    const accessCookie = serialize('session_token', data.access_token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: data.expires_in || 3600,
-      path: '/',
-      sameSite: 'lax',
-    });
-
-    // Refresh Token
-    const refreshCookie = serialize('refresh_token', data.refresh_token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: 86400 * 14, 
-      path: '/',
-      sameSite: 'lax',
-    });
-
-    // 4. 쿠키 설정 및 대시보드로 리다이렉트
-    res.setHeader('Set-Cookie', [accessCookie, refreshCookie, clearStateCookie, clearVerifierCookie]);
-    res.redirect('/'); // 성공 시 루트(대시보드)로 이동
-
+    // 6. 로그인 성공! 메인 페이지로 이동
+    res.redirect('/');
+    
   } catch (error) {
-    console.error("BFF Callback Error:", error);
-    return res.status(500).json({ error: "internal_server_error" });
+    console.error("Token Exchange Error:", error);
+    res.status(500).json({ error: "Internal Server Error during Token Exchange" });
   }
 }

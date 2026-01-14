@@ -15,20 +15,22 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
     return res.status(400).json({ error: 'missing_parameters' });
   }
 
-  // 2. Provider 로그인 페이지로 Redirect
-  // 이때, 원래 클라이언트가 요청했던 정보들을 쿼리 스트링으로 고스란히 넘겨줍니다.
-  // 그래야 로그인 성공 후 다시 돌아갈 곳(redirect_uri)을 알 수 있으니까요.
+  // 2. Client Login Page로 Redirect (Headless Pattern)
+  // Mock Provider가 "로그인은 니네(Client)가 시켜라" 하고 클라이언트의 로그인 페이지로 보냅니다.
+  // 이때도 역시 OAuth 파라미터들을 계속 전달해야 합니다.
   
-  const providerLoginUrl = new URL('/provider/signin', `http://${req.headers.host}`);
-  providerLoginUrl.searchParams.set('client_id', client_id as string);
-  providerLoginUrl.searchParams.set('redirect_uri', redirect_uri as string);
-  providerLoginUrl.searchParams.set('state', state as string || '');
+  const protocol = req.headers['x-forwarded-proto'] || 'http';
+  const host = req.headers.host;
+  const clientLoginUrl = new URL('/login', `${protocol}://${host}`);
+  clientLoginUrl.searchParams.set('client_id', client_id as string);
+  clientLoginUrl.searchParams.set('redirect_uri', redirect_uri as string);
+  clientLoginUrl.searchParams.set('state', state as string || '');
 
   // PKCE 파라미터 전달
   if (code_challenge) {
-      providerLoginUrl.searchParams.set('code_challenge', code_challenge as string);
-      providerLoginUrl.searchParams.set('code_challenge_method', code_challenge_method as string || 'S256');
+      clientLoginUrl.searchParams.set('code_challenge', code_challenge as string);
+      clientLoginUrl.searchParams.set('code_challenge_method', code_challenge_method as string || 'S256');
   }
 
-  res.redirect(providerLoginUrl.toString());
+  res.redirect(clientLoginUrl.toString());
 }
