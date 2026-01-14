@@ -12,7 +12,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
   }
 
   // 만료된 쿠키를 덮어쓰기하여 삭제 효과를 냅니다.
-  const expiredAccess = serialize('session_token', '', {
+  const expiredLoggedIn = serialize('is_logged_in', '', {
     maxAge: -1,
     path: '/',
   });
@@ -22,7 +22,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
     path: '/',
   });
 
-  res.setHeader('Set-Cookie', [expiredAccess, expiredRefresh]);
+  res.setHeader('Set-Cookie', [expiredLoggedIn, expiredRefresh]);
   
   return res.status(200).json({ success: true });
 }

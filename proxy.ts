@@ -5,10 +5,11 @@ export default function proxy(req: NextRequest) {
   console.log(`[PROXY] Request: ${pathname}`);
 
   // 1. 토큰 검사 (가장 먼저 수행)
-  const sessionToken = req.cookies.get("session_token");
+  // 'is_logged_in' 쿠키만 체크 (Access Token은 클라이언트 메모리에 있음)
+  const isLoggedIn = req.cookies.get("is_logged_in");
 
   // [Check 1] 이미 로그인 된 유저가 로그인 페이지에 오면 -> 메인으로 보냄
-  if (sessionToken && pathname === '/login') {
+  if (isLoggedIn && pathname === '/login') {
     console.log('[PROXY] Already logged in, redirecting /login -> /');
     return NextResponse.redirect(new URL('/', req.url));
   }
@@ -28,7 +29,7 @@ export default function proxy(req: NextRequest) {
   }
     
   // [Check 2] 토큰이 없으면 로그인 시작
-  if (!sessionToken) {
+  if (!isLoggedIn) {
     console.log(`[PROXY] No session token, redirecting ${pathname} -> signin`);
     return NextResponse.redirect(new URL("/api/auth/signin", req.url));
   }

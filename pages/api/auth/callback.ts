@@ -60,12 +60,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // 5. 토큰을 받아서 세션 쿠키로 굽기
     const { access_token, refresh_token, expires_in } = tokenData;
 
-    // Access Token (세션용)
-    const sessionCookie = serialize('session_token', access_token, {
-      httpOnly: true,
+    // [Silent Refresh Pattern]
+    // Access Token은 쿠키에 굽지 않습니다! (메모리 관리)
+    // 대신 "로그인 상태임"을 알리는 껍데기 쿠키만 굽습니다.
+    // 미들웨어는 이 쿠키를 보고 "아 로그인은 했구나" 판단만 하고,
+    // 실제 Access Token은 클라이언트가 새로고침 하자마자 /refresh API로 받아옵니다.
+    const loggedInCookie = serialize('is_logged_in', 'true', {
+      httpOnly: false, // JS에서 확인 가능 (UI 처리용)
       secure: process.env.NODE_ENV === 'production',
       path: '/',
-      maxAge: expires_in, // 토큰 수명과 동일하게 설정
+      maxAge: 60 * 60 * 24 * 7, // 7일 (Refresh Token 수명과 맞춤)
       sameSite: 'lax',
     });
 
@@ -83,7 +87,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const clearVerifierCookie = serialize('code_verifier', '', { maxAge: -1, path: '/' });
 
     res.setHeader('Set-Cookie', [
-      sessionCookie,
+      loggedInCookie,
       refreshCookie,
       clearStateCookie,
       clearVerifierCookie

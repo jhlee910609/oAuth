@@ -16,6 +16,26 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
   console.log(`[PROVIDER] Code: ${code}`);
 
   // 1. Validate Grant Type
+  if (grant_type === 'refresh_token') {
+      const refreshToken = req.body.refresh_token;
+      console.log(`[PROVIDER] Refresh Token Grant: ${refreshToken}`);
+
+      // 실제로는 DB에서 Refresh Token 유효성을 검사해야 함
+      if (!refreshToken || !refreshToken.startsWith('mock_refresh_token_')) {
+          return res.status(400).json({ error: 'invalid_grant', error_description: 'Invalid Refresh Token' });
+      }
+
+      // 새 Access Token 발급 (Refresh Token 회전은 생략)
+      const newAccessToken = 'mock_access_token_' + Math.random().toString(36).substring(7);
+
+      return res.status(200).json({
+          access_token: newAccessToken,
+          token_type: 'Bearer',
+          expires_in: 30, // 30초
+          scope: 'read_profile'
+      });
+  }
+
   if (grant_type !== 'authorization_code') {
     console.error('[PROVIDER] Error: Unsupported grant type');
     return res.status(400).json({ error: 'unsupported_grant_type' });

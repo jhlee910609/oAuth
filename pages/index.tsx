@@ -1,16 +1,42 @@
 import Link from "next/link";
 import Head from "next/head";
-import { GetServerSideProps } from "next";
+import { useState, useEffect } from "react";
 
-interface Props {
-  sessionToken?: string;
-  refreshToken?: string;
-}
+export default function Dashboard() {
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [loadingToken, setLoadingToken] = useState(true);
 
-export default function Dashboard({ sessionToken, refreshToken }: Props) {
+  // [Silent Refresh] 앱 진입 시 Refresh Token을 사용해 Access Token 발급
+  useEffect(() => {
+    const silentRefresh = async () => {
+      try {
+        // 백엔드에 Silent Refresh 요청 (HttpOnly Cookie 사용)
+        const res = await fetch("/api/auth/refresh", { method: "POST" });
+
+        if (res.ok) {
+          const data = await res.json();
+          setAccessToken(data.access_token);
+          console.log("[Client] Access Token acquired via Silent Refresh");
+        } else {
+          console.warn(
+            "[Client] Failed to refresh token. User might need to login."
+          );
+          // 리프레시 실패 시 (로그인 만료 등) -> 로그인 페이지로 이동하거나 로그아웃 처리
+          // 여기서는 자동 이동보다는 UI에 상태를 반영합니다.
+        }
+      } catch (err) {
+        console.error("[Client] Silent Refresh Error:", err);
+      } finally {
+        setLoadingToken(false);
+      }
+    };
+
+    silentRefresh();
+  }, []);
+
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
-    window.location.reload(); // 미들웨어가 알아서 로그인 페이지로 보냄
+    window.location.reload();
   };
 
   return (
@@ -29,9 +55,17 @@ export default function Dashboard({ sessionToken, refreshToken }: Props) {
         </div>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-full">
-            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+            <div
+              className={`w-2 h-2 rounded-full ${
+                accessToken ? "bg-green-500 animate-pulse" : "bg-red-500"
+              }`}
+            ></div>
             <span className="text-xs font-medium text-gray-500">
-              Live Session
+              {loadingToken
+                ? "Checking..."
+                : accessToken
+                ? "Token Active"
+                : "No Token"}
             </span>
           </div>
           <button
@@ -47,7 +81,7 @@ export default function Dashboard({ sessionToken, refreshToken }: Props) {
         <header className="mb-10">
           <h1 className="text-3xl font-bold mb-2">Welcome Back!</h1>
           <p className="text-gray-500">
-            OAuth 2.0 인증을 통해 안전하게 접속되었습니다.
+            OAuth 2.0 Silent Refresh Pattern 적용됨
           </p>
         </header>
 
@@ -69,10 +103,10 @@ export default function Dashboard({ sessionToken, refreshToken }: Props) {
                 ></path>
               </svg>
             </div>
-            <h3 className="text-gray-500 text-sm font-medium mb-1">
-              Session Duration
-            </h3>
-            <p className="text-2xl font-bold">59m 30s</p>
+            <h3 className="text-gray-500 text-sm font-medium mb-1">Session</h3>
+            <p className="text-2xl font-bold">
+              {accessToken ? "Active" : "Inactive"}
+            </p>
           </div>
           <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
             <div className="w-10 h-10 bg-purple-100 text-purple-600 rounded-xl flex items-center justify-center mb-4">
@@ -90,10 +124,8 @@ export default function Dashboard({ sessionToken, refreshToken }: Props) {
                 ></path>
               </svg>
             </div>
-            <h3 className="text-gray-500 text-sm font-medium mb-1">
-              Auth Method
-            </h3>
-            <p className="text-2xl font-bold">OAuth 2.0</p>
+            <h3 className="text-gray-500 text-sm font-medium mb-1">Auth</h3>
+            <p className="text-2xl font-bold">Silent Refresh</p>
           </div>
           <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
             <div className="w-10 h-10 bg-emerald-100 text-emerald-600 rounded-xl flex items-center justify-center mb-4">
@@ -114,7 +146,13 @@ export default function Dashboard({ sessionToken, refreshToken }: Props) {
             <h3 className="text-gray-500 text-sm font-medium mb-1">
               Token Status
             </h3>
-            <p className="text-2xl font-bold text-emerald-600">Active</p>
+            <p
+              className={`text-2xl font-bold ${
+                accessToken ? "text-emerald-600" : "text-gray-400"
+              }`}
+            >
+              {accessToken ? "Active" : "None"}
+            </p>
           </div>
         </div>
 
@@ -136,24 +174,19 @@ export default function Dashboard({ sessionToken, refreshToken }: Props) {
                 d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
               ></path>
             </svg>
-            Secure Token Data
+            Secure Token Data (In-Memory)
           </h2>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 gap-8">
             <div>
               <h3 className="text-xs font-bold text-emerald-500 uppercase tracking-widest mb-3">
-                Access Token
+                Access Token (JS Variable)
               </h3>
-              <div className="bg-black/30 rounded-xl p-4 font-mono text-xs break-all leading-relaxed border border-white/5 hover:border-white/10 transition-colors h-32 overflow-y-auto custom-scrollbar">
-                {sessionToken || "Not Available"}
-              </div>
-            </div>
-            <div>
-              <h3 className="text-xs font-bold text-blue-500 uppercase tracking-widest mb-3">
-                Refresh Token
-              </h3>
-              <div className="bg-black/30 rounded-xl p-4 font-mono text-xs break-all leading-relaxed border border-white/5 hover:border-white/10 transition-colors h-32 overflow-y-auto custom-scrollbar">
-                {refreshToken || "Not Available"}
+              <div className="bg-black/30 rounded-xl p-4 font-mono text-xs break-all leading-relaxed border border-white/5 hover:border-white/10 transition-colors h-24 overflow-y-auto custom-scrollbar">
+                {accessToken ||
+                  (loadingToken
+                    ? "Fetching from Silent Refresh..."
+                    : "Not Available (Refresh Failed - Please Re-login)")}
               </div>
             </div>
           </div>
@@ -172,8 +205,73 @@ export default function Dashboard({ sessionToken, refreshToken }: Props) {
                 d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
               ></path>
             </svg>
-            Server-Side Rendered (HttpOnly Cookie Access)
+            Access Token은 브라우저 메모리에만 존재하며, 새로고침 시 즉시
+            사라집니다. (보안 강화)
           </p>
+        </section>
+
+        {/* Direct Client-Side API Call */}
+        <section className="bg-white rounded-2xl p-8 border border-gray-200 shadow-sm mb-10">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-xl font-bold text-gray-900 border-l-4 border-indigo-500 pl-3">
+                Direct Client API Call
+              </h2>
+              <p className="text-sm text-gray-500 mt-1">
+                메모리에 있는 Access Token을 사용하여 외부 API를 직접
+                호출합니다.
+              </p>
+            </div>
+            <button
+              onClick={async () => {
+                const btn = document.getElementById("direct-btn");
+                if (btn) btn.innerText = "Calling...";
+
+                try {
+                  // Access Token이 메모리(State)에 있는지 확인
+                  if (!accessToken) {
+                    alert("Token is not ready yet. Please sign in again.");
+                    return;
+                  }
+
+                  // 외부 API 서버로 직접 요청 (Header 방식)
+                  const res = await fetch("/api/resource/profile", {
+                    headers: { Authorization: `Bearer ${accessToken}` },
+                  });
+                  const data = await res.json();
+
+                  const display = document.getElementById("direct-result");
+                  if (display)
+                    display.innerText = JSON.stringify(data, null, 2);
+                } catch (err) {
+                  alert("Direct Call Failed");
+                } finally {
+                  if (btn) btn.innerText = "Call Protected API";
+                }
+              }}
+              id="direct-btn"
+              disabled={!accessToken}
+              className={`px-4 py-2 text-white text-sm font-medium rounded-lg shadow-sm transition-colors ${
+                accessToken
+                  ? "bg-indigo-600 hover:bg-indigo-700"
+                  : "bg-gray-400 cursor-not-allowed"
+              }`}
+            >
+              Call Protected API
+            </button>
+          </div>
+
+          <div className="bg-indigo-50 rounded-xl p-6 border border-indigo-100">
+            <h3 className="text-xs font-bold text-indigo-400 uppercase tracking-widest mb-4">
+              Response from Direct Browser Fetch
+            </h3>
+            <pre
+              id="direct-result"
+              className="text-xs font-mono text-indigo-700 overflow-x-auto"
+            >
+              Ready to fetch...
+            </pre>
+          </div>
         </section>
 
         {/* Quick Actions */}
@@ -243,17 +341,3 @@ export default function Dashboard({ sessionToken, refreshToken }: Props) {
     </div>
   );
 }
-
-// SSR Requirement for Middleware consistency & Token Fetching
-export const getServerSideProps: GetServerSideProps = async (context) => {
-  const { req } = context;
-  const sessionToken = req.cookies["session_token"] || null;
-  const refreshToken = req.cookies["refresh_token"] || null;
-
-  return {
-    props: {
-      sessionToken,
-      refreshToken,
-    },
-  };
-};
