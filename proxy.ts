@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 
-export default function middleware(req: NextRequest) {
+export default function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
+  console.log(`[PROXY] Request: ${pathname}`);
 
   // 1. 토큰 검사 (가장 먼저 수행)
   const sessionToken = req.cookies.get("session_token");
 
   // [Check 1] 이미 로그인 된 유저가 로그인 페이지에 오면 -> 메인으로 보냄
   if (sessionToken && pathname === '/login') {
+    console.log('[PROXY] Already logged in, redirecting /login -> /');
     return NextResponse.redirect(new URL('/', req.url));
   }
 
@@ -21,14 +23,17 @@ export default function middleware(req: NextRequest) {
   ];
 
   if (publicPaths.some((path) => pathname.startsWith(path))) {
+    console.log(`[PROXY] Public path access: ${pathname}`);
     return NextResponse.next();
   }
     
   // [Check 2] 토큰이 없으면 로그인 시작
   if (!sessionToken) {
+    console.log(`[PROXY] No session token, redirecting ${pathname} -> signin`);
     return NextResponse.redirect(new URL("/api/auth/signin", req.url));
   }
 
+  console.log(`[PROXY] Access allowed: ${pathname}`);
   return NextResponse.next();
 }
 

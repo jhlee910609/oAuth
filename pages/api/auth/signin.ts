@@ -7,6 +7,7 @@ import crypto from 'crypto';
  * PKCE (Proof Key for Code Exchange) Flow 적용
  */
 export default function handler(req: NextApiRequest, res: NextApiResponse) {
+  console.log('--- [BFF] Signin Flow Started ---');
   // 1. CSRF State 생성
   const state = Math.random().toString(36).substring(7);
   
@@ -15,6 +16,10 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
   const codeVerifier = crypto.randomBytes(32).toString('base64url');
   // Challenge: Verifier를 SHA256 해시 -> Base64Url 인코딩
   const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('base64url');
+
+  console.log(`[BFF] Generated State: ${state}`);
+  console.log(`[BFF] Generated Verifier: ${codeVerifier}`);
+  console.log(`[BFF] Generated Challenge: ${codeChallenge}`);
 
   // 3. State & Verifier 쿠키 설정 (HttpOnly)
   const stateCookie = serialize('oauth_state', state, {
@@ -51,6 +56,9 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
   // PKCE Parameters
   authUrl.searchParams.set("code_challenge", codeChallenge);
   authUrl.searchParams.set("code_challenge_method", "S256");
+
+  console.log(`[BFF] Redirecting to Provider: ${authUrl.toString()}`);
+  console.log('--- [BFF] Signin Flow Initiated ---');
 
   // 5. 헤더 설정 & 리다이렉트
   res.setHeader('Set-Cookie', [stateCookie, verifierCookie]);

@@ -8,10 +8,16 @@ import type { NextApiRequest, NextApiResponse } from 'next';
  * 로그인을 위해 'Provider의 로그인 페이지'로 토스합니다.
  */
 export default function handler(req: NextApiRequest, res: NextApiResponse) {
+  console.log('--- [PROVIDER] Authorize Endpoint Called ---');
   const { client_id, redirect_uri, response_type, state, code_challenge, code_challenge_method } = req.query;
+
+  console.log(`[PROVIDER] Client ID: ${client_id}`);
+  console.log(`[PROVIDER] Redirect UI: ${redirect_uri}`);
+  console.log(`[PROVIDER] PKCE Challenge: ${code_challenge}`);
 
   // 1. 필수 파라미터 검증
   if (!client_id || !redirect_uri || response_type !== 'code') {
+    console.error('[PROVIDER] Error: Missing required OAuth parameters');
     return res.status(400).json({ error: 'missing_parameters' });
   }
 
@@ -31,6 +37,9 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
       clientLoginUrl.searchParams.set('code_challenge', code_challenge as string);
       clientLoginUrl.searchParams.set('code_challenge_method', code_challenge_method as string || 'S256');
   }
+
+  console.log(`[PROVIDER] Delegating Login UI back to Client: ${clientLoginUrl.toString()}`);
+  console.log('--- [PROVIDER] Authorization Delegated ---');
 
   res.redirect(clientLoginUrl.toString());
 }

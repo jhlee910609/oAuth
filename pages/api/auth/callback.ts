@@ -6,17 +6,24 @@ import { serialize } from 'cookie';
  * Authorization Code를 받아 Access Token으로 교환하고 세션을 맺는 역할
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  console.log('--- [BFF] Callback Flow Started ---');
   // 1. Query String에서 Authorization Code & State 추출
   const { code, state } = req.query;
   // 2. 쿠키에 저장해둔 검증용 데이터 추출
   const { oauth_state, code_verifier } = req.cookies;
 
+  console.log(`[BFF] Received Code: ${code}`);
+  console.log(`[BFF] Received State: ${state}`);
+  console.log(`[BFF] Stored State: ${oauth_state}`);
+
   if (!code || !state || !oauth_state || !code_verifier) {
+    console.error('[BFF] Error: Missing required parameters or cookies');
     return res.status(400).json({ error: "Missing required parameters or cookies" });
   }
 
   // 3. State 보안 검증 (CSRF 방지)
   if (state !== oauth_state) {
+    console.error('[BFF] Error: State mismatch');
     return res.status(400).json({ error: "Invalid state. Possible CSRF attack." });
   }
 
@@ -26,6 +33,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const host = req.headers.host;
     const tokenEndpoint = `${protocol}://${host}/api/oauth/token`;
 
+    console.log(`[BFF] Requesting Tokens from: ${tokenEndpoint}`);
     const tokenResponse = await fetch(tokenEndpoint, {
       method: "POST",
       headers: {
@@ -43,8 +51,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const tokenData = await tokenResponse.json();
 
     if (!tokenResponse.ok) {
+        console.error('[BFF] Token Exchange Failed:', tokenData);
         return res.status(400).json(tokenData);
     }
+
+    console.log('[BFF] Token Exchange Success!');
 
     // 5. 토큰을 받아서 세션 쿠키로 굽기
     const { access_token, refresh_token, expires_in } = tokenData;
@@ -78,6 +89,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       clearVerifierCookie
     ]);
 
+    console.log('[BFF] Cookies Set. Redirecting to Dashboard.');
+    console.log('--- [BFF] Callback Flow Finished ---');
     // 6. 로그인 성공! 메인 페이지로 이동
     res.redirect('/');
     
